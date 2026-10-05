@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>동네 분리수거 백과 — AI 스마트 분리배출 비서</title>
+  <meta name="theme-color" content="#10b981">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .pulse-ring {
+      animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+    }
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 20px rgba(16, 185, 129, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+    .fade-in {
+      animation: fadeIn 0.3s ease-out forwards;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col justify-between">
+
+  <!-- 상단 네비게이션 -->
+  <header class="bg-white/80 backdrop-blur-md sticky top-0 z-30 border-b border-slate-100 px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-2.5">
+      <div class="w-9 h-9 rounded-xl bg-emerald-500 text-white flex items-center justify-center shadow-md shadow-emerald-500/20">
+        <i class="fa-solid fa-recycle text-lg"></i>
+      </div>
+      <div>
+        <h1 class="font-bold text-base text-slate-900 leading-tight">동네 분리수거 백과</h1>
+        <p class="text-[11px] text-emerald-600 font-medium">AI 비전 기반 배출 가이드</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-1.5">
+      <button id="historyBtn" class="w-9 h-9 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-600 transition">
+        <i class="fa-solid fa-clock-rotate-left"></i>
+      </button>
+      <button id="settingsBtn" class="w-9 h-9 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-600 transition relative">
+        <i class="fa-solid fa-gear"></i>
+        <span id="apiKeyDot" class="w-2 h-2 rounded-full bg-amber-500 absolute top-2 right-2 border-2 border-white hidden"></span>
+      </button>
+    </div>
+  </header>
+
+  <!-- 메인 컨텐츠 영역 -->
+  <main class="flex-1 max-w-md w-full mx-auto p-4 flex flex-col justify-center">
+
+    <!-- 1. 촬영/업로드 전 대기 화면 -->
+    <div id="idleState" class="flex flex-col items-center text-center py-6 fade-in">
+      <div class="relative mb-6">
+        <div class="w-28 h-28 rounded-full bg-emerald-50 flex items-center justify-center pulse-ring">
+          <i class="fa-solid fa-camera-viewfinder text-4xl text-emerald-500"></i>
+        </div>
+      </div>
+      <h2 class="text-xl font-bold text-slate-900 mb-2">헷갈리는 쓰레기를 찍어보세요</h2>
+      <p class="text-sm text-slate-500 leading-relaxed max-w-xs mb-8">
+        택배 상자, 복합 플라스틱, 배달 용기 등<br>
+        환경부 지침에 맞는 <b>정확한 배출법</b>을 3초 만에 알려드려요.
+      </p>
+
+      <!-- 액션 버튼들 -->
+      <div class="w-full space-y-3">
+        <!-- 카메라 촬영 (모바일에서 카메라 직접 호출) -->
+        <label class="w-full bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-semibold py-4 px-6 rounded-2xl flex items-center justify-center gap-3 shadow-lg shadow-emerald-600/25 cursor-pointer transition">
+          <i class="fa-solid fa-camera text-xl"></i>
+          <span class="text-base">카메라로 찰칵 찍기</span>
+          <input type="file" id="cameraInput" accept="image/*" capture="environment" class="hidden">
+        </label>
+
+        <!-- 앨범에서 선택 -->
+        <label class="w-full bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-700 font-medium py-3.5 px-6 rounded-2xl border border-slate-200 flex items-center justify-center gap-2 cursor-pointer transition">
+          <i class="fa-regular fa-image text-lg text-slate-500"></i>
+          <span class="text-sm">앨범/갤러리에서 사진 찾기</span>
+          <input type="file" id="galleryInput" accept="image/*" class="hidden">
+        </label>
+      </div>
+
+      <!-- 환경 팁 칩 -->
+      <div class="mt-8 bg-emerald-50/70 border border-emerald-100 rounded-xl p-3 flex items-center gap-2.5 text-left text-xs text-emerald-800">
+        <i class="fa-solid fa-seedling text-emerald-600 text-sm flex-shrink-0"></i>
+        <span><b>투명 페트병</b>은 라벨을 떼고 압착 후 뚜껑을 닫아서 투명페트 전용함에 배출하세요!</span>
+      </div>
+    </div>
+
+    <!-- 2. 분석 중 로딩 화면 -->
+    <div id="loadingState" class="hidden flex-col items-center text-center py-10 fade-in">
+      <div class="w-48 h-48 rounded-2xl overflow-hidden shadow-md relative mb-6 border-2 border-emerald-500">
+        <img id="previewImage" src="" alt="촬영 이미지" class="w-full h-full object-cover">
+        <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-[2px] flex flex-col items-center justify-center text-white p-4">
+          <i class="fa-solid fa-arrows-rotate fa-spin text-3xl mb-2 text-emerald-400"></i>
+          <p class="text-xs font-semibold tracking-wide">Gemini AI 정밀 분석 중</p>
+        </div>
+      </div>
+      <h3 class="text-lg font-bold text-slate-900 mb-1">재질과 분리수거 방법을 분석하고 있어요</h3>
+      <p class="text-xs text-slate-500">환경부 4대 배출 원칙(비·헹·분·섞) 대조 중...</p>
+    </div>
+
+    <!-- 3. 분석 결과 카드 화면 -->
+    <div id="resultState" class="hidden fade-in space-y-4 py-2">
+      <!-- 상단 결과 배지 & 품목명 -->
+      <div class="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 space-y-4">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <div class="flex items-center gap-2 mb-1.5">
+              <span id="badgePill" class="text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
+                재활용 가능
+              </span>
+              <span id="categoryPill" class="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">
+                투명페트
+              </span>
+            </div>
+            <h2 id="resultItemName" class="text-2xl font-extrabold text-slate-900 leading-snug">
+              투명 생수 페트병
+            </h2>
+          </div>
+          <button id="retakeBtn" class="text-xs font-semibold text-slate-500 bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-xl flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-arrow-rotate-left"></i>
+            다시 찍기
+          </button>
+        </div>
+
+        <!-- 4대 배출 수칙 체크리스트 -->
+        <div class="border-t border-slate-100 pt-3">
+          <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+            <i class="fa-solid fa-list-check text-emerald-500"></i>
+            올바른 배출 4단계 행동 요령
+          </h4>
+          <ul id="stepsList" class="space-y-2 text-sm text-slate-700">
+            <!-- 렌더링될 항목들 -->
+          </ul>
+        </div>
+
+        <!-- 주의사항 박스 -->
+        <div id="cautionBox" class="bg-amber-50/80 border border-amber-200/70 rounded-2xl p-3.5 flex items-start gap-2.5 text-xs text-amber-900 leading-relaxed">
+          <i class="fa-solid fa-triangle-exclamation text-amber-500 text-sm mt-0.5 flex-shrink-0"></i>
+          <div>
+            <span class="font-bold">주의사항:</span>
+            <span id="cautionText"></span>
+          </div>
+        </div>
+        <p id="modelNote" class="text-[11px] text-slate-400 text-center"></p>
+      </div>
+
+      <!-- 다른 물건 바로 촬영 버튼 -->
+      <button id="nextScanBtn" class="w-full bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-semibold py-4 rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition">
+        <i class="fa-solid fa-camera"></i>
+        <span>다른 물건도 분리수거 확인하기</span>
+      </button>
+    </div>
+
+  </main>
+
+  <!-- 하단 푸터 -->
+  <footer class="py-3 px-4 text-center text-[11px] text-slate-400 border-t border-slate-100 bg-white/50">
+    <p>대한민국 환경부 「내 손안의 분리배출」 기준 준수 • AI 분석: Gemini · OpenRouter 무료 모델</p>
+  </footer>
+
+  <!-- 설정 모달 (API Key 설정) -->
+  <div id="settingsModal" class="fixed inset-0 bg-slate-950/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 fade-in">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center">
+            <i class="fa-solid fa-key text-sm"></i>
+          </div>
+          <h3 class="font-bold text-slate-900 text-base">API 설정</h3>
+        </div>
+        <button id="closeSettingsBtn" class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="space-y-2">
+        <label class="text-xs font-semibold text-slate-600">구글 AI 스튜디오 API Key <span class="font-normal text-slate-400">(1순위, 빠름)</span></label>
+        <input type="password" id="apiKeyInput" placeholder="AIzaSy..." class="w-full text-xs font-mono px-3.5 py-3 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition">
+        <p class="text-[11px] text-slate-400 leading-normal">
+          키는 본인 브라우저(LocalStorage)에만 안전하게 저장되며 외부로 유출되지 않습니다.
+        </p>
+      </div>
+
+      
+      <div class="space-y-2">
+        <label class="text-xs font-semibold text-slate-600">OpenRouter API Key <span class="font-normal text-slate-400">(보조, 무료 모델)</span></label>
+        <input type="password" id="orKeyInput" placeholder="sk-or-v1-..." class="w-full text-xs font-mono px-3.5 py-3 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition">
+        <p class="text-[11px] text-slate-400 leading-normal">
+          구글 한도가 끝나거나 오류가 나면 OpenRouter 무료 모델(Qwen, Gemma)로 자동 전환돼요. 키 하나만 넣어도 동작해요. 무료 모델은 요청 내용이 제공사에 기록될 수 있어요.
+        </p>
+      </div>
+
+      <div class="space-y-1">
+        <label class="text-xs font-semibold text-slate-600">Gemini 모델 선택</label>
+        <select id="modelSelect" class="w-full text-xs px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-500">
+          <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (기본, 가장 빠르고 가벼움)</option>
+          <option value="gemini-3-flash-preview">Gemini 3 Flash Preview (정확도 우선)</option>
+          <option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
+        </select>
+      </div>
+
+      <div class="pt-2 flex gap-2">
+        <button id="saveSettingsBtn" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 rounded-xl text-xs transition">
+          저장 완료
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 히스토리 모달 -->
+  <div id="historyModal" class="fixed inset-0 bg-slate-950/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 max-h-[80vh] flex flex-col fade-in">
+      <div class="flex items-center justify-between">
+        <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
+          <i class="fa-solid fa-clock-rotate-left text-emerald-600"></i>
+          최근 진단 기록
+        </h3>
+        <button id="closeHistoryBtn" class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div id="historyList" class="flex-1 overflow-y-auto space-y-2 pr-1 text-xs">
+        <!-- 히스토리 리스트 항목 -->
+      </div>
+      <button id="clearHistoryBtn" class="text-center text-xs text-rose-500 hover:underline pt-2">
+        기록 모두 지우기
+      </button>
+    </div>
+  </div>
+
+  <script>
+    // 상태 관리
+    let currentApiKey = localStorage.getItem('gemini_api_key') || '';
+    let currentOrKey = localStorage.getItem('openrouter_api_key') || '';
+    const OR_MODELS = ['qwen/qwen3.8-27b:free', 'google/gemma-4-31b-it:free'];
+    const VALID_MODELS = ['gemini-3.1-flash-lite', 'gemini-3-flash-preview', 'gemini-3.5-flash'];
+    let currentModel = localStorage.getItem('gemini_model');
+    if (!VALID_MODELS.includes(currentModel)) {
+      currentModel = 'gemini-3.1-flash-lite';
+      localStorage.setItem('gemini_model', currentModel);
+    }
+    let scanHistory = JSON.parse(localStorage.getItem('recycle_history') || '[]');
+
+    const idleState = document.getElementById('idleState');
+    const loadingState = document.getElementById('loadingState');
+    const resultState = document.getElementById('resultState');
+    const cameraInput = document.getElementById('cameraInput');
+    const galleryInput = document.getElementById('galleryInput');
+    const previewImage = document.getElementById('previewImage');
+    const apiKeyDot = document.getElementById('apiKeyDot');
+
+    // UI 초기화
+    function checkApiKey() {
+      if (!currentApiKey && !currentOrKey) {
+        apiKeyDot.classList.remove('hidden');
+      } else {
+        apiKeyDot.classList.add('hidden');
+      }
+    }
+    checkApiKey();
+
+    // 설정 모달 열기/닫기
+    const settingsBtn = document.getElementById('settingsBtn');
+    const settingsModal = document.getElementById('settingsModal');
+    const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+    const apiKeyInput = document.getElementById('apiKeyInput');
+    const modelSelect = document.getElementById('modelSelect');
+    const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+
+    settingsBtn.addEventListener('click', () => {
+      apiKeyInput.value = currentApiKey;
+      document.getElementById('orKeyInput').value = currentOrKey;
+      modelSelect.value = currentModel;
+      settingsModal.classList.remove('hidden');
+    });
+
+    closeSettingsBtn.addEventListener('click', () => settingsModal.classList.add('hidden'));
+
+    saveSettingsBtn.addEventListener('click', () => {
+      currentApiKey = apiKeyInput.value.trim();
+      currentOrKey = document.getElementById('orKeyInput').value.trim();
+      localStorage.setItem('openrouter_api_key', currentOrKey);
+      currentModel = modelSelect.value;
+      localStorage.setItem('gemini_api_key', currentApiKey);
+      localStorage.setItem('gemini_model', currentModel);
+      settingsModal.classList.add('hidden');
+      checkApiKey();
+      alert('설정이 안전하게 저장되었습니다!');
+    });
+
+    // 히스토리 모달 열기/닫기
+    const historyBtn = document.getElementById('historyBtn');
+    const historyModal = document.getElementById('historyModal');
+    const closeHistoryBtn = document.getElementById('closeHistoryBtn');
+    const historyList = document.getElementById('historyList');
+    const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+
+    function renderHistory() {
+      if (scanHistory.length === 0) {
+        historyList.innerHTML = '<p class="text-slate-400 text-center py-6">진단 기록이 없습니다.</p>';
+        return;
+      }
+      historyList.innerHTML = scanHistory.map(item => `
+        <div class="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between">
+          <div>
+            <div class="font-bold text-slate-800">${item.itemName}</div>
+            <div class="text-[11px] text-slate-500">${item.category} • ${item.date}</div>
+          </div>
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold ${item.badgeColor === 'green' ? 'bg-emerald-100 text-emerald-700' : (item.badgeColor === 'yellow' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700')}">
+            ${item.isRecyclable ? '재활용' : '일반쓰레기'}
+          </span>
+        </div>
+      `).join('');
+    }
+
+    historyBtn.addEventListener('click', () => {
+      renderHistory();
+      historyModal.classList.remove('hidden');
+    });
+    closeHistoryBtn.addEventListener('click', () => historyModal.classList.add('hidden'));
+    clearHistoryBtn.addEventListener('click', () => {
+      if (confirm('모든 기록을 삭제하시겠습니까?')) {
+        scanHistory = [];
+        localStorage.setItem('recycle_history', '[]');
+        renderHistory();
+      }
+    });
+
+    // 사진 촬영 및 선택 핸들러
+    [cameraInput, galleryInput].forEach(input => {
+      input.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        if (!currentApiKey && !currentOrKey) {
+          alert('먼저 우측 상단 톱니바퀴 아이콘을 눌러 구글 AI 스튜디오 또는 OpenRouter API Key를 입력해 주세요!');
+          settingsModal.classList.remove('hidden');
+          return;
+        }
+
+        // 이미지 미리보기 설정
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+          const base64Data = event.target.result;
+          previewImage.src = base64Data;
+          showLoading();
+
+          try {
+            await analyzeTrash(base64Data, file.type || 'image/jpeg');
+          } catch (err) {
+            alert('분석 중 오류가 발생했습니다: ' + err.message);
+            showIdle();
+          }
+        };
+        reader.readAsDataURL(file);
+      });
+    });
+
+    function showIdle() {
+      idleState.classList.remove('hidden');
+      loadingState.classList.add('hidden');
+      resultState.classList.add('hidden');
+      cameraInput.value = '';
+      galleryInput.value = '';
+    }
+
+    function showLoading() {
+      idleState.classList.add('hidden');
+      loadingState.classList.remove('hidden');
+      resultState.classList.add('hidden');
+    }
+
+    function showResult(data) {
+      idleState.classList.add('hidden');
+      loadingState.classList.add('hidden');
+      resultState.classList.remove('hidden');
+
+      // 렌더링
+      const badgePill = document.getElementById('badgePill');
+      const categoryPill = document.getElementById('categoryPill');
+      const resultItemName = document.getElementById('resultItemName');
+      const stepsList = document.getElementById('stepsList');
+      const cautionText = document.getElementById('cautionText');
+
+      resultItemName.textContent = data.itemName || '분류 미확인 품목';
+      categoryPill.textContent = data.category || '기타';
+      cautionText.textContent = data.caution || '이물질이 묻지 않도록 주의하세요.';
+
+      if (data.badgeColor === 'green' || data.isRecyclable === true) {
+        badgePill.textContent = '재활용 가능';
+        badgePill.className = 'text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider bg-emerald-100 text-emerald-700 border border-emerald-200';
+      } else if (data.badgeColor === 'yellow') {
+        badgePill.textContent = '조건부 배출';
+        badgePill.className = 'text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider bg-amber-100 text-amber-700 border border-amber-200';
+      } else {
+        badgePill.textContent = '일반 종량제 배출';
+        badgePill.className = 'text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider bg-rose-100 text-rose-700 border border-rose-200';
+      }
+
+      stepsList.innerHTML = (data.steps || []).map((step, idx) => `
+        <li class="flex items-start gap-2.5">
+          <span class="w-5 h-5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-xs flex items-center justify-center flex-shrink-0 mt-0.5">
+            ${idx + 1}
+          </span>
+          <span class="leading-relaxed">${step}</span>
+        </li>
+      `).join('');
+
+      // 히스토리 저장
+      scanHistory.unshift({
+        itemName: data.itemName,
+        category: data.category,
+        isRecyclable: data.isRecyclable,
+        badgeColor: data.badgeColor,
+        date: new Date().toLocaleDateString('ko-KR')
+      });
+      if (scanHistory.length > 20) scanHistory.pop();
+      localStorage.setItem('recycle_history', JSON.stringify(scanHistory));
+    }
+
+    // Gemini API 호출 로직
+    async function analyzeTrash(dataUrl, mimeType) {
+      const pureBase64 = dataUrl.split(',')[1];
+
+      const promptText = `당신은 대한민국 환경부의 「내 손안의 분리배출」 가이드라인을 완벽히 숙지한 분리수거 전문가 AI입니다.
+사용자가 제공한 사진 속 물품을 정밀하게 분석하여 다음 JSON 스키마 규격으로만 응답하세요.
+
+헷갈리기 쉬운 품목은 아래 기준을 따르세요.
+- 백열전구, LED전구, 깨진 유리, 도자기, 거울, 내열유리(코렉스), 크리스탈 유리는 재활용이 아닙니다. 종량제봉투 또는 불연성 폐기물 마대로 배출(isRecyclable=false, badgeColor=red).
+- 형광등과 폐건전지는 일반 재활용이 아니라 전용 수거함에 배출합니다(badgeColor=yellow).
+- 음식물이 묻어 씻어지지 않는 종이, 비닐, 스티로폼은 종량제봉투입니다. 깨끗하면 재활용(badgeColor=yellow 또는 green).
+- 치킨 뼈, 계란 껍데기, 조개 껍데기 등은 일반쓰레기이고 과일 씨는 음식물쓰레기입니다.
+- 지자체마다 세부 기준이 다를 수 있으니 caution에 "지자체 기준 확인" 문구를 넣으세요.
+
+
+JSON 출력 포맷:
+{
+  "itemName": "물품의 구체적인 이름 (예: 투명 생수 페트병, 컵라면 스티로폼 용기 등)",
+  "isRecyclable": true 또는 false,
+  "category": "배출 카테고리 (투명페트, 플라스틱, 비닐류, 종이류, 종량제봉투 등)",
+  "badgeColor": "green(가능) 또는 yellow(조건부) 또는 red(불가)",
+  "steps": [
+    "단계별 4대 원칙(비·헹·분·섞)에 맞춘 배출 행동 요령 3~4개"
+  ],
+  "caution": "주의사항 및 오배출 방지 팁 1~2문장"
+}`;
+
+      const withTimeout = (p, ms, ctl) => { const t = setTimeout(() => ctl.abort(), ms); return p.finally(() => clearTimeout(t)); };
+      const parseLoose = (txt) => {
+        const cleaned = (txt || '').replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+        const o = JSON.parse(cleaned);
+        if (!o || typeof o.itemName !== 'string' || !Array.isArray(o.steps)) throw new Error('형식 오류');
+        return o;
+      };
+
+      async function geminiCall(model) {
+        const ctl = new AbortController();
+        const r = await withTimeout(fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent', {
+          method: 'POST', signal: ctl.signal,
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': currentApiKey },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: promptText }, { inline_data: { mime_type: mimeType, data: pureBase64 } }] }],
+            generationConfig: { response_mime_type: 'application/json', temperature: 0.2 }
+          })
+        }), 45000, ctl);
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) { const err = new Error((j.error && j.error.message) || ('HTTP ' + r.status)); err.status = r.status; throw err; }
+        return parseLoose(j.candidates?.[0]?.content?.parts?.map(p => p.text || '').join(''));
+      }
+
+      async function orCall(model) {
+        const ctl = new AbortController();
+        const r = await withTimeout(fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST', signal: ctl.signal,
+          headers: { 'Authorization': 'Bearer ' + currentOrKey, 'Content-Type': 'application/json', 'X-Title': 'Dongne Recycle Guide' },
+          body: JSON.stringify({
+            model, temperature: 0.2, max_tokens: 800, response_format: { type: 'json_object' },
+            messages: [{ role: 'user', content: [{ type: 'text', text: promptText }, { type: 'image_url', image_url: { url: dataUrl } }] }]
+          })
+        }), 70000, ctl);
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) { const err = new Error((j.error && j.error.message) || ('HTTP ' + r.status)); err.status = r.status; throw err; }
+        return parseLoose(j.choices?.[0]?.message?.content);
+      }
+
+      // 무료 모델 목록이 바뀌었을 때를 대비해, 이미지 입력이 가능한 무료 모델을 직접 찾아 두 개까지 시도
+      async function discoverFreeVisionModels(exclude) {
+        const r = await fetch('https://openrouter.ai/api/v1/models');
+        const j = await r.json();
+        return (j.data || [])
+          .filter(m => Number(m.pricing?.prompt) === 0 && Number(m.pricing?.completion) === 0 && (m.architecture?.input_modalities || []).includes('image'))
+          .filter(m => !/safety|guard|lyria|tts|transcribe|embedding/i.test(m.id) && !exclude.includes(m.id))
+          .map(m => m.id).slice(0, 2);
+      }
+
+      const attempts = [];
+      if (currentApiKey) {
+        [currentModel, ...VALID_MODELS.filter(m => m !== currentModel)].forEach(m => attempts.push({ label: m, call: () => geminiCall(m), provider: 'gemini' }));
+      }
+      if (currentOrKey) OR_MODELS.forEach(m => attempts.push({ label: m.replace(':free', ''), call: () => orCall(m), provider: 'or' }));
+
+      const dead = new Set();
+      let lastErr = '';
+      let parsed = null, usedLabel = '';
+      async function runAttempts(list) {
+        for (const a of list) {
+          if (dead.has(a.provider)) continue;
+          try { parsed = await a.call(); usedLabel = a.label; return true; }
+          catch (e) {
+            lastErr = a.label + ': ' + (e.name === 'AbortError' ? '시간 초과' : e.message);
+            if (e.status === 401 || e.status === 403 || (e.status === 400 && /api key|API_KEY/i.test(e.message || ''))) dead.add(a.provider);
+          }
+        }
+        return false;
+      }
+      let ok = await runAttempts(attempts);
+      if (!ok && currentOrKey && !dead.has('or')) {
+        try {
+          const extra = await discoverFreeVisionModels(OR_MODELS);
+          ok = await runAttempts(extra.map(m => ({ label: m.replace(':free', ''), call: () => orCall(m), provider: 'or' })));
+        } catch (e) { /* 무시 */ }
+      }
+      if (!ok) {
+        throw new Error('모든 모델이 지금은 답하지 못했어요. 잠시 후 다시 시도해 주세요. (' + String(lastErr).slice(0, 90) + ')');
+      }
+      document.getElementById('modelNote').textContent = 'AI 분석 모델: ' + usedLabel + (usedLabel.includes('/') ? ' (OpenRouter 무료 모델)' : '') + ' · 결과는 참고용이에요.';
+      showResult(parsed);
+    }
+
+    document.getElementById('retakeBtn').addEventListener('click', showIdle);
+    document.getElementById('nextScanBtn').addEventListener('click', showIdle);
+  </script>
+</body>
+</html>
