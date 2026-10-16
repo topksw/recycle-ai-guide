@@ -128,10 +128,11 @@ function validateResult(text) {
       Object.keys(value).length !== KEYS.length || !KEYS.every(k => Object.hasOwn(value, k))) throw new Error('schema');
   const clean = (s, max) => typeof s === 'string' && s === s.trim() && s.length > 0 && s.length <= max && !/[<>\u0000-\u001f\u007f]/.test(s);
   if (!clean(value.itemName, 100) || !clean(value.category, 60) || !clean(value.caution, 600) ||
-      !value.caution.includes('지자체 기준 확인') || typeof value.isRecyclable !== 'boolean' ||
+      typeof value.isRecyclable !== 'boolean' ||
       !['green', 'yellow', 'red'].includes(value.badgeColor) ||
       (value.badgeColor === 'green' && !value.isRecyclable) || (value.badgeColor === 'red' && value.isRecyclable) ||
       !Array.isArray(value.steps) || value.steps.length < 3 || value.steps.length > 4 || !value.steps.every(s => clean(s, 250))) throw new Error('schema');
+  if (!value.caution.includes('지자체 기준 확인')) value.caution = value.caution.slice(0, 570) + ' 지자체 기준 확인이 필요해요.';
   return Object.fromEntries(KEYS.map(k => [k, value[k]]));
 }
 async function providerJSON(url, options, state, maxBytes = 100_000) {
@@ -148,7 +149,7 @@ async function providerJSON(url, options, state, maxBytes = 100_000) {
 }
 async function analyze(image, env, state) {
   let attempts = 0;
-  if (env.GEMINI_API_KEY?.trim()) {
+  if (env.GEMINI_API_KEY?.trim() && !env.OPENROUTER_API_KEY?.trim()) {
     for (const model of GEMINI_MODELS) {
       if (state.signal.aborted) break;
       attempts++;
@@ -185,7 +186,7 @@ async function analyze(image, env, state) {
         try {
           const body = await providerJSON('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST', headers: { Authorization: 'Bearer ' + env.OPENROUTER_API_KEY, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model, temperature: 0.2, max_tokens: 1400,
+            body: JSON.stringify({ model, temperature: 0.2, max_tokens: 2200, reasoning: { effort: 'low' },
               provider: { max_price: { prompt: 0, completion: 0 }, allow_fallbacks: false },
               response_format: { type: 'json_object' },
               messages: [{ role: 'system', content: PROMPT }, { role: 'user', content: [

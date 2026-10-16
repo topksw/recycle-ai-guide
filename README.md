@@ -8,7 +8,7 @@ index.html은 사진 압축과 화면을 담당하며, worker.js는 Cloudflare�
 - D1 데이터베이스를 DB 이름으로 바인딩합니다. quotas 테이블은 요청 시 생성됩니다.
 - Worker Secrets에 GEMINI_API_KEY 및/또는 OPENROUTER_API_KEY를 설정합니다. 키를 HTML, Git, 공개 변수, 채팅에 넣지 마세요.
 - 대기 중에도 만료된 할당량 행을 정리하려면 Cron Trigger를 매시 정각(0 * * * *)으로 설정합니다. scheduled 핸들러가 정리합니다.
-- 현재 중계 주소: https://recycle-ai-proxy.lbluedl.workers.dev/analyze. 기본 모델은 전용 Gemini Secret을 사용합니다. OpenRouter 공유 Secret은 현재 설정하지 않았습니다. 개인 키 모드는 설정에서 선택적으로 사용할 수 있습니다.
+- 현재 중계 주소: https://recycle-ai-proxy.lbluedl.workers.dev/analyze. 현재 공유 분석은 전용 OpenRouter Secret으로 가격 0인 이미지 모델을 우선 사용합니다. Google AI의 일부 Cloudflare 지역 차단을 피하기 위해 OpenRouter Secret이 있으면 Gemini 직접 호출을 생략합니다. Gemini Secret은 OpenRouter Secret이 없는 구성에서 사용합니다. 개인 키 모드는 설정에서 선택적으로 사용할 수 있습니다.
 
 ## 계약
 모든 경로에 Origin: https://topksw.github.io가 필요합니다. 없거나 다르면 403입니다. OPTIONS는 지정된 메서드와 Content-Type 헤더만 허용합니다.
@@ -22,11 +22,11 @@ POST /analyze: Content-Type: application/json, 본문은 {"image":"data:image/jp
 오류: {"error":"한국어 안내"}. 400 형식, 403 출처, 404 경로, 405 메서드, 413 크기, 415 콘텐츠 유형, 429 한도, 502 모델 실패, 503 준비/DB 실패, 504 시간 초과. 429에는 Retry-After 초 단위 헤더가 있습니다. 제공사 오류·응답·비밀은 사용자에게 전달하거나 코드에서 기록하지 않습니다.
 
 ## 모델과 시간 제한
-Gemini 순서는 gemini-3.1-flash-lite, gemini-3-flash-preview, gemini-3.5-flash입니다. 가용성은 보장하지 않습니다. Gemini 요금제/청구 제한은 제공사 계정에서 별도 관리해야 합니다. Gemini 무료 사용을 강제하는 설정은 아닙니다.
+OpenRouter Secret이 없을 때 Gemini 순서는 gemini-3.1-flash-lite, gemini-3-flash-preview, gemini-3.5-flash입니다. 가용성은 보장하지 않습니다. Gemini 요금제/청구 제한은 제공사 계정에서 별도 관리해야 합니다. Gemini 무료 사용을 강제하는 설정은 아닙니다.
 
 OpenRouter 키가 있을 때만 카탈로그를 조회해 이미지 입력 및 텍스트 출력이 가능하고 prompt/completion 가격이 명시적으로 0인 모델을 최대 두 개 선택합니다. 실제 요청에도 최대 prompt/completion 가격 0 및 제공사 fallback 비활성화를 설정합니다. 유료 모델이나 고정 미검증 모델로 전환하지 않습니다. 가격 변경/부가 과금/계정 정책의 최종 관리는 제공사에서 확인하세요.
 
-요청당 추론 호출 최대 4회, OpenRouter 카탈로그 조회 최대 1회입니다. 따라서 Gemini 3회 실패 후 OpenRouter는 최대 1회만 시도합니다. OpenRouter만 설정하면 최대 2회입니다. 업로드·한도 확인·카탈로그를 포함한 전체 응답 제한 85초, 각 외부 HTTP 호출은 본문 읽기를 포함하여 최대 25초입니다. 남은 시간이 적으면 다음 호출 시간이 줄어듭니다.
+요청당 추론 호출 최대 4회, OpenRouter 카탈로그 조회 최대 1회입니다. 따라서 현재 OpenRouter Secret이 있으면 Gemini 직접 호출을 생략하고 무료 이미지 모델을 최대 2회 시도합니다. 업로드·한도 확인·카탈로그를 포함한 전체 응답 제한 85초, 각 외부 HTTP 호출은 본문 읽기를 포함하여 최대 25초입니다. OpenRouter의 출력 한도는 2,200토큰이며 낮은 추론 강도를 요청합니다. 남은 시간이 적으면 다음 호출 시간이 줄어듭니다.
 
 ## 한도와 개인정보
 UTC 날짜 기준 전역 100회/일, IP 해시별 10회/일 및 10초에 1회입니다. Cloudflare가 설정하는 CF-Connecting-IP가 없으면 거부합니다. Worker 앞단이 해당 헤더를 신뢰할 수 있게 전달하는 표준 Cloudflare 배포를 전제로 합니다.
